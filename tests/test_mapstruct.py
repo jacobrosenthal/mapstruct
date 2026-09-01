@@ -145,8 +145,31 @@ def test_api():
     check(bool(mapstruct.__version__), 'version is %s' % mapstruct.__version__)
 
 
+def test_entry_points():
+    """Every way of starting mapstruct must actually start.
+
+    The frozen build died here once: PyInstaller runs its entry as a TOP-LEVEL script with no
+    parent package, so a relative import inside it raises at run time while the build itself
+    succeeds. Running each entry in the mode it will really be used in is the only thing that
+    catches that, so all three are exercised - as a module, as a package, and as a bare script
+    the way PyInstaller invokes it.
+    """
+    import subprocess
+    print('entry points')
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, 'src')
+    env = dict(os.environ, PYTHONPATH=src)
+    for label, argv in (
+            ('python -m mapstruct', [sys.executable, '-m', 'mapstruct', '--help']),
+            ('the PyInstaller entry', [sys.executable, os.path.join(root, 'tools', 'pyi_entry.py'), '--help']),
+    ):
+        r = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        ok = r.returncode == 0 and b'mapstruct' in r.stdout
+        check(ok, '%s runs%s' % (label, '' if ok else ': ' + r.stdout.decode()[-200:].strip()))
+
+
 def main():
-    for t in (test_pkexplode, test_tilesets, test_classify, test_png, test_api):
+    for t in (test_pkexplode, test_tilesets, test_classify, test_png, test_api, test_entry_points):
         t()
     print()
     if FAILS:

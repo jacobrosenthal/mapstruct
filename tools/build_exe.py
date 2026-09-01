@@ -36,7 +36,9 @@ def main():
         raise SystemExit('PyInstaller is not installed.  pip install pyinstaller')
 
     name = 'mapstruct' + SUFFIX.get(platform.system(), '')
-    entry = os.path.join(ROOT, 'src', 'mapstruct', '__main__.py')
+    # NOT src/mapstruct/__main__.py: PyInstaller runs the entry as a top-level script with no
+    # parent package, so its relative imports fail at run time. See tools/pyi_entry.py.
+    entry = os.path.join(ROOT, 'tools', 'pyi_entry.py')
 
     cmd = [
         sys.executable, '-m', 'PyInstaller',
