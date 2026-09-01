@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapstruct"
+version = "1.0.0"
+description = "See what StarCraft: Brood War's engine thinks your map's terrain is - walkable, buildable, and how high."
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "LICENSE" }
+authors = [{ name = "Jacob Rosenthal" }]
+keywords = ["starcraft", "broodwar", "mapping", "scm", "scx", "mpq", "gamedev"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment :: Real Time Strategy",
+    "Topic :: Multimedia :: Graphics",
+]
+# Deliberately none. Everything is standard library, so `pip install mapstruct`
+# cannot fail on a wheel that will not build.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jacobrosenthal/mapstruct"
+Issues = "https://github.com/jacobrosenthal/mapstruct/issues"
+
+[project.scripts]
+mapstruct = "mapstruct.core:_console"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mapstruct = ["mpyq-LICENSE"]

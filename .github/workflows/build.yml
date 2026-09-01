@@ -1,0 +1,117 @@
+# Build the downloadable artifacts and attach them to a GitHub release.
+#
+# Push a tag to cut a release:
+#
+#     git tag v1.0.0 && git push origin v1.0.0
+#
+# PyInstaller cannot cross-compile - it freezes for the OS it runs on - so the .exe, the macOS
+# binary and the Linux binary each need a runner of that OS. That is the whole reason this file
+# exists: it is how a Windows .exe gets built without owning a Windows machine.
+#
+# The .pyz is platform-independent, so it is built once.
+
+name: build
+
+on:
+  push:
+    # Tags cut a release; branch pushes just build and leave artifacts behind. Both belong under
+    # ONE push key - listing push twice is valid YAML but the second silently wins, which would
+    # mean tag builds never fire.
+    tags: ['v*']
+    branches: [main, master]
+  pull_request:
+  # Runnable by hand, so artifacts can be checked before tagging.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run the tests
+        # No pip install: mapstruct depends on nothing, and the tests should prove that by
+        # running against a bare interpreter.
+        run: python tests/test_mapstruct.py
+
+  pyz:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python tools/build_pyz.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mapstruct.pyz
+          path: dist/mapstruct.pyz
+
+  exe:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: mapstruct.exe
+          - os: macos-latest
+            artifact: mapstruct-macos
+          - os: ubuntu-latest
+            artifact: mapstruct-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Oldest Python that is convenient to install here. A PyInstaller binary carries the
+          # interpreter it was built with, and on Linux the glibc of the runner sets the floor
+          # for what the binary will run on, so an older runner means wider compatibility.
+          python-version: '3.11'
+      - run: pip install pyinstaller
+      - run: python tools/build_exe.py
+      - name: Check the binary actually runs
+        # A frozen binary that cannot find its own hidden imports still builds fine and fails on
+        # first use, which is exactly the failure a release must not ship. So run it.
+        shell: bash
+        run: |
+          ./dist/${{ matrix.artifact }} --help > /dev/null
+          echo "ran OK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    # Only when a tag was pushed; ordinary branch builds just leave artifacts behind.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pyz, exe]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: ls -la artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            Download the one that suits you - none of them need StarCraft installed.
+
+            | file | for |
+            |---|---|
+            | `mapstruct.exe` | Windows, no Python needed. Drop map files onto it. |
+            | `mapstruct-macos` | macOS. `chmod +x` it first. |
+            | `mapstruct-linux` | Linux. `chmod +x` it first. |
+            | `mapstruct.pyz` | Any OS with Python: `python3 mapstruct.pyz map.scx` |
+
+            The binaries are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
+            both complain on first run. `pip install mapstruct` avoids that entirely.
